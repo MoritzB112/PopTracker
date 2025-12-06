@@ -557,6 +557,31 @@ int Tracker::ProviderCountForCode(const std::string& code)
     return res;
 }
 
+std::vector<std::string> Tracker::ListProviderNamesForCode(const std::string& code) const
+{
+    std::vector<std::string> names;
+
+#ifdef JSONITEM_CI_QUIRK
+    const auto lower = JsonItem::toLower(code);
+    for (const auto& item : _jsonItems) {
+        if (item.canProvideCodeLower(lower) && !item.getName().empty())
+            names.push_back(item.getName());
+    }
+#else
+    for (const auto& item : _jsonItems) {
+        if (item.canProvideCode(code) && !item.getName().empty())
+            names.push_back(item.getName());
+    }
+#endif
+
+    for (const auto& item : _luaItems) {
+        if (item.canProvideCode(code) && !item.getName().empty())
+            names.push_back(item.getName());
+    }
+
+    return names;
+}
+
 Tracker::Object Tracker::FindObjectForCode(const char* code)
 {
     const auto it = _objectCache.find(std::string_view(code));

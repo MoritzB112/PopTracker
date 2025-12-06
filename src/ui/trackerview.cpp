@@ -17,6 +17,7 @@
 #include "defaults.h" // DEFAULT_FONT_*
 #include <string>
 #include <vector>
+#include <algorithm>
 
 #include "../core/jsonutil.h"
 
@@ -24,6 +25,42 @@ namespace Ui {
 
 
 constexpr int TOOL_MAX_DISPLACEMENT=5; // can be off by this amount
+
+static void positionMapTooltip(MapTooltip* tooltip, MapWidget* map, const Position& pos, int absX, int absY, const Size& viewSize)
+{
+    int mapLeft = map->getAbsLeft() - absX; // FIXME: this is not really a good solution
+    int mapTop = map->getAbsTop() - absY;
+
+    if (tooltip->getLeft() + tooltip->getWidth() > mapLeft + map->getWidth()) {
+        if ((tooltip->getLeft() + tooltip->getWidth()) - (mapLeft + map->getWidth()) <= TOOL_MAX_DISPLACEMENT)
+            // displace so it fits
+            tooltip->setLeft(mapLeft + map->getWidth() - tooltip->getWidth());
+        else {
+            // move it to left of cursor
+            tooltip->setLeft(pos.left - absX - tooltip->getWidth() + MapTooltip::OFFSET);
+            if (tooltip->getLeft() < mapLeft)
+                tooltip->setLeft(mapLeft);
+        }
+    }
+    if (tooltip->getHeight() > viewSize.height) {
+        tooltip->setHeight(viewSize.height);
+        tooltip->setTop(0);
+    }
+    else if (tooltip->getTop() + tooltip->getHeight() > mapTop + map->getHeight()) {
+        if ((tooltip->getTop() + tooltip->getHeight()) - (mapTop + map->getHeight()) <= TOOL_MAX_DISPLACEMENT)
+            // displace so it fits
+            tooltip->setTop(mapTop + map->getHeight() - tooltip->getHeight());
+        else {
+            // move it to top of cursor
+            tooltip->setTop(pos.top - absY - tooltip->getHeight() + MapTooltip::OFFSET);
+            if (tooltip->getTop() < mapTop)
+                tooltip->setTop(mapTop);
+            // if that doesn't fit, move it to the middle
+            if (tooltip->getTop() + tooltip->getHeight() > viewSize.height)
+                tooltip->setTop((viewSize.height - tooltip->getHeight())/2);
+        }
+    }
+}
 
 static std::list<ImageFilter> imageModsToFilters(const Tracker* tracker, const std::list<std::string>& mods)
 {
@@ -500,6 +537,124 @@ void TrackerView::updateMapTooltip()
             _mapTooltip->setHeight(_mapTooltip->getAutoHeight());
         }
     }
+    if (_pinnedMapTooltip && _pinnedMapTooltipOwner) {
+        _pinnedMapTooltip->update(_tracker, [this](Item* w, const BaseItem& item) { updateItem(w, item); });
+        if (_pinnedMapTooltip->getAutoHeight() > _pinnedMapTooltip->getHeight()) {
+            _pinnedMapTooltip->setHeight(std::min(_size.height - _pinnedMapTooltip->getTop(),
+                    _pinnedMapTooltip->getAutoHeight()));
+        } else if (_pinnedMapTooltip->getAutoHeight() < _pinnedMapTooltip->getHeight()) {
+            _pinnedMapTooltip->setHeight(_pinnedMapTooltip->getAutoHeight());
+        }
+    }
+}
+
+void TrackerView::unpinMapTooltip()
+{
+    if (!_pinnedMapTooltip)
+        return;
+    _mapTooltipScrollOffsets[_pinnedMapTooltipName] = _pinnedMapTooltip->getScrollY();
+    removeChild(_pinnedMapTooltip);
+    auto tmp = _pinnedMapTooltip;
+    _pinnedMapTooltip = nullptr;
+    _pinnedMapTooltipOwner = nullptr;
+    delete tmp;
+}
+
+void TrackerView::hideMiddleClickPopup()
+{
+    if (!_middleClickPopup)
+        return;
+
+    removeChild(_middleClickPopup);
+    auto tmp = _middleClickPopup;
+    _middleClickPopup = nullptr;
+    _middleClickPopupOwner = nullptr;
+    delete tmp;
+}
+
+void TrackerView::showMiddleClickPopup(MapWidget* owner, const Position& pos, const std::string& locId, const std::string& sectionName, Widget::Color sectionColor, const std::string& requirementsText)
+{
+    if (!owner)
+        return;
+
+    hideMiddleClickPopup();
+
+    _middleClickPopupOwner = owner;
+    _middleClickPopupPos = pos;
+
+    auto off = MapTooltip::OFFSET;
+    const int safetyMargin = 12;
+    const int minWidth = 220;
+    const int minHeight = 150;
+    auto popup = new ScrollVBox(pos.left - _absX - safetyMargin, pos.top - _absY - safetyMargin, minWidth, 0);
+    popup->setPadding(3 * MapTooltip::OFFSET);
+    popup->setSpacing(5 * MapTooltip::OFFSET);
+    popup->setBackground({0x00, 0x00, 0x00, 0xbf});
+
+    std::string titleText = sectionName.empty() ? locId : sectionName;
+    Label* title = new Label(0, 0, 0, 0, _font, "Requirements " + titleText);
+    title->setTextColor(sectionColor);
+    title->setMinSize(title->getAutoSize());
+    auto titleMargin = title->getMargin();
+    title->setMargin({titleMargin.left, titleMargin.top + 2 * MapTooltip::OFFSET, titleMargin.right, titleMargin.bottom + 3 * MapTooltip::OFFSET});
+    popup->addChild(title);
+
+    Label* lbl = new Label(0, 0, 0, 0, _smallFont, requirementsText.empty() ? "No requirements" : requirementsText);
+    lbl->setTextColor({0xff, 0xff, 0xff});
+    lbl->setMinSize(lbl->getAutoSize());
+    auto margin = lbl->getMargin();
+    lbl->setMargin({margin.left, margin.top + 6 * MapTooltip::OFFSET, margin.right, margin.bottom});
+    popup->addChild(lbl);
+
+    Size autoSize = popup->getAutoSize();
+    autoSize.width = std::max(autoSize.width, minWidth);
+    autoSize.height = std::max(autoSize.height + safetyMargin, minHeight);
+    popup->setSize(autoSize);
+    popup->setMinSize(autoSize);
+
+    // keep popup within the tracker view bounds
+    if (popup->getLeft() + popup->getWidth() > _size.width - off)
+        popup->setLeft(std::max(off, _size.width - off - popup->getWidth()));
+    if (popup->getLeft() < off)
+        popup->setLeft(off);
+    if (popup->getTop() + popup->getHeight() > _size.height - off)
+        popup->setTop(std::max(off, _size.height - off - popup->getHeight()));
+    if (popup->getTop() < off)
+        popup->setTop(off);
+
+    addChild(popup);
+    _middleClickPopup = popup;
+
+    popup->onMouseLeave += { this, [this](void*) {
+        hideMiddleClickPopup();
+    }};
+}
+
+void TrackerView::pinMapTooltip(MapWidget* owner, const std::string& location, const Position& pos)
+{
+    if (!owner)
+        return;
+
+    unpinMapTooltip();
+
+    _pinnedMapTooltipOwner = owner;
+    _pinnedMapTooltipName = location;
+    _pinnedMapTooltipPos = pos;
+    auto off = MapTooltip::OFFSET;
+
+    _pinnedMapTooltip = new MapTooltip(pos.left-_absX-off, pos.top-_absY-off, _font, _smallFont, _defaultItemQuality,
+            _tracker, location, [this](auto ...args) { return makeItem(args...); },
+            [this](const std::string&, const std::string&, Widget::Color, const std::string&) {
+                unpinMapTooltip();
+            });
+
+    positionMapTooltip(_pinnedMapTooltip, owner, pos, _absX, _absY, _size);
+    _pinnedMapTooltip->scrollTo(0, _mapTooltipScrollOffsets[location]);
+    addChild(_pinnedMapTooltip);
+    _pinnedMapTooltip->onClick += { this, [this](void*, int, int, int btn) {
+        if (btn == MouseButton::BUTTON_MIDDLE)
+            unpinMapTooltip();
+    }};
 }
 
 void TrackerView::updateDisplay(const std::string& itemid)
@@ -900,41 +1055,13 @@ bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, si
                 _mapTooltipPos = {absX,absY};
                 auto off = MapTooltip::OFFSET;
                 _mapTooltip = new MapTooltip(absX-_absX-off, absY-_absY-off, _font, _smallFont, _defaultItemQuality,
-                        _tracker, locid, [this](auto ...args) { return makeItem(args...); });
+                        _tracker, locid, [this](auto ...args) { return makeItem(args...); },
+                        [this, map, absX, absY](const std::string& locName, const std::string& secName, Widget::Color color, const std::string& requirements) {
+                            showMiddleClickPopup(map, {absX, absY}, locName, secName, color, requirements);
+                        });
                 // TODO: move mapTooltip to mapwidget?
                 // fix up position
-                int mapLeft = map->getAbsLeft()-_absX; // FIXME: this is not really a good solution
-                int mapTop = map->getAbsTop()-_absY;
-                // TODO: include window size in this calculation? (content can be bigger than window)
-                if (_mapTooltip->getLeft() + _mapTooltip->getWidth() > mapLeft + map->getWidth()) {
-                    if ((_mapTooltip->getLeft() + _mapTooltip->getWidth()) - (mapLeft + map->getWidth()) <= TOOL_MAX_DISPLACEMENT)
-                        // displace so it fits
-                        _mapTooltip->setLeft(mapLeft + map->getWidth() - _mapTooltip->getWidth());
-                    else {
-                        // move it to left of cursor
-                        _mapTooltip->setLeft(absX-_absX-_mapTooltip->getWidth()+off);
-                        if (_mapTooltip->getLeft() < mapLeft)
-                            _mapTooltip->setLeft(mapLeft);
-                    }
-                }
-                if (_mapTooltip->getHeight() > _size.height) {
-                    _mapTooltip->setHeight(_size.height);
-                    _mapTooltip->setTop(0);
-                }
-                else if (_mapTooltip->getTop() + _mapTooltip->getHeight() > mapTop + map->getHeight()) {
-                    if ((_mapTooltip->getTop() + _mapTooltip->getHeight()) - (mapTop + map->getHeight()) <= TOOL_MAX_DISPLACEMENT)
-                        // displace so it fits
-                        _mapTooltip->setTop(mapTop + map->getHeight() - _mapTooltip->getHeight());
-                    else {
-                        // move it to top of cursor
-                        _mapTooltip->setTop(absY-_absY-_mapTooltip->getHeight()+off);
-                        if (_mapTooltip->getTop() < mapTop)
-                            _mapTooltip->setTop(mapTop);
-                        // if that doesn't fit, move it to the middle
-                        if (_mapTooltip->getTop() + _mapTooltip->getHeight() > _size.height)
-                            _mapTooltip->setTop((_size.height - _mapTooltip->getHeight())/2);
-                    }
-                }
+                positionMapTooltip(_mapTooltip, map, {absX, absY}, _absX, _absY, _size);
                 // restore scroll position
                 _mapTooltip->scrollTo(0, _mapTooltipScrollOffsets[locid]);
                 // add tooltip to widgets

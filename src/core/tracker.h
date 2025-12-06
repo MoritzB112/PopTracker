@@ -5,6 +5,7 @@
 #include <list>
 #include <set>
 #include <string>
+#include <vector>
 #include <unordered_set>
 #include <luaglue/luainterface.h>
 #include <luaglue/luatype.h>
@@ -70,6 +71,7 @@ public:
     bool AddMaps(const std::string& file);
     bool AddLayouts(const std::string& file);
     int ProviderCountForCode(const std::string& code);
+    std::vector<std::string> ListProviderNamesForCode(const std::string& code) const;
     Object FindObjectForCode(const char* code);
     LuaItem *CreateLuaItem();
     void UiHint(const std::string& name, const std::string& value);
