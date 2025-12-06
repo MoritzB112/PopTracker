@@ -1,4 +1,6 @@
 #include "tracker.h"
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 #include <sstream>
 #include <luaglue/luamethod.h>
@@ -27,6 +29,25 @@ static JsonItem blankItem = JsonItem::FromJSON(json({}));
 static Map blankMap = Map::FromJSON(json({}));
 static Location blankLocation;// = Location::FromJSON(json({}));
 static LocationSection blankLocationSection;// = LocationSection::FromJSON(json({}));
+
+static std::string normalizeSectionToken(const std::string& token)
+{
+    std::string normalized = token;
+    if (!normalized.empty() && normalized.front() == '@')
+        normalized.erase(normalized.begin());
+
+    const std::string prefix = "Location ";
+    if (normalized.rfind(prefix, 0) == 0)
+        normalized = normalized.substr(prefix.size());
+
+    std::transform(normalized.begin(), normalized.end(), normalized.begin(), [](unsigned char ch) {
+        if (ch == ' ' || ch == '-')
+            return '_';
+        return (char)std::tolower(ch);
+    });
+
+    return normalized;
+}
 
 Tracker::Tracker(Pack* pack, lua_State *L)
     : _pack(pack), _L(L)
@@ -808,6 +829,26 @@ std::pair<Location&, LocationSection&> Tracker::getLocationAndSection(const std:
         }
     }
     return {blankLocation, blankLocationSection};
+}
+
+std::pair<const Location*, const LocationSection*> Tracker::findLocationSectionByToken(const std::string& token) const
+{
+    const auto normalizedTarget = normalizeSectionToken(token);
+
+    for (const auto& loc : _locations) {
+        for (const auto& sec : loc.getSections()) {
+            const auto normalizedFullID = normalizeSectionToken(sec.getFullID());
+            const auto normalizedShortID = normalizeSectionToken(loc.getID() + "/" + sec.getName());
+            const auto normalizedNameOnly = normalizeSectionToken(sec.getName());
+
+            if (normalizedFullID == normalizedTarget || normalizedShortID == normalizedTarget
+                    || normalizedNameOnly == normalizedTarget) {
+                return {&loc, &sec};
+            }
+        }
+    }
+
+    return {nullptr, nullptr};
 }
 
 LocationSection& Tracker::getLocationSection(const std::string& id)

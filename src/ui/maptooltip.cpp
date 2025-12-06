@@ -94,7 +94,43 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
     if (s.empty()) {
         label = inspectOnly ? "Inspect" : "No requirement";
     } else if (isLocationReference) {
-        label = "Location " + s.substr(1);
+        const auto ref = s.substr(1);
+        const auto [loc, sec] = tracker->getLocationAndSection(ref);
+        const auto slashPos = ref.find('/');
+        const auto secname = slashPos == ref.npos ? std::string() : ref.substr(slashPos + 1);
+        if (!loc.getID().empty() && !sec.getName().empty()) {
+            label = sec.getName();
+            if (depth < REQUIREMENT_NESTING_LIMIT) {
+                auto key = loc.getID() + "/" + sec.getName();
+                if (visited.emplace(key).second) {
+                    const auto nested = formatRequirements(tracker, sec, visited, depth + 1);
+                    if (!nested.empty())
+                        label += ": " + nested;
+                    visited.erase(key);
+                }
+            }
+        } else {
+            const auto [altLoc, altSec] = tracker->findLocationSectionByToken(ref);
+            if (altLoc && altSec) {
+                label = altSec->getName();
+                if (depth < REQUIREMENT_NESTING_LIMIT) {
+                    auto key = altLoc->getID() + "/" + altSec->getName();
+                    if (visited.emplace(key).second) {
+                        const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1);
+                        if (!nested.empty())
+                            label += ": " + nested;
+                        visited.erase(key);
+                    }
+                }
+            } else {
+                label = "Location " + ref;
+                if (!secname.empty() && depth < REQUIREMENT_NESTING_LIMIT) {
+                    auto nested = formatRuleToken(secname, tracker, visited, depth + 1);
+                    if (!nested.empty() && nested != secname)
+                        label += ": " + nested;
+                }
+            }
+        }
     } else if (isAccessibilityLevel) {
         label = "Rule " + s.substr(1);
     } else if (s.find('/') != s.npos && depth < REQUIREMENT_NESTING_LIMIT) {
@@ -107,6 +143,26 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
                 if (!nested.empty())
                     label += ": " + nested;
                 visited.erase(key);
+            }
+        } else {
+            const auto [altLoc, altSec] = tracker->findLocationSectionByToken(s);
+            if (altLoc && altSec) {
+                label = altSec->getName();
+                auto key = altLoc->getID() + "/" + altSec->getName();
+                if (visited.emplace(key).second) {
+                    const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1);
+                    if (!nested.empty())
+                        label += ": " + nested;
+                    visited.erase(key);
+                }
+            } else {
+                label = s;
+                const auto providers = tracker->ListProviderNamesForCode(s);
+                if (!providers.empty()) {
+                    const auto providersLabel = join(providers, ", ");
+                    if (!(providers.size() == 1 && providersLabel == label))
+                        label += " (" + providersLabel + ")";
+                }
             }
         }
     } else {

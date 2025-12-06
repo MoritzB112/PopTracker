@@ -603,7 +603,8 @@ void TrackerView::showMiddleClickPopup(MapWidget* owner, const Position& pos, co
     lbl->setTextColor({0xff, 0xff, 0xff});
     lbl->setMinSize(lbl->getAutoSize());
     auto margin = lbl->getMargin();
-    lbl->setMargin({margin.left, margin.top + 100 * MapTooltip::OFFSET, margin.right, margin.bottom});
+    const int bodyOffset = static_cast<int>(title->getMinSize().height) + 6 * MapTooltip::OFFSET;
+    lbl->setMargin({margin.left, margin.top + bodyOffset, margin.right, margin.bottom});
     popup->addChild(lbl);
 
     Size autoSize = popup->getAutoSize();
