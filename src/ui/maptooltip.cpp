@@ -47,7 +47,8 @@ Widget::Color MapTooltip::getSectionColor(AccessibilityLevel reachable, bool cle
 
 
 MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tracker* tracker, const std::string& locid,
-        std::function<Item*(int, int, int, int, const std::string& code)> makeItem)
+                       std::function<Item*(int, int, int, int, const std::string& code)> makeItem,
+                       std::function<void(const std::string& locid, const std::string& section, Widget::Color)> onSectionMiddleClick)
     : ScrollVBox(x, y, 100, 100)
 {
     bool compact = true;
@@ -55,6 +56,7 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
 
     setPadding(2*OFFSET);
     setSpacing(OFFSET);
+    _onSectionMiddleClick = onSectionMiddleClick;
 
     auto& loc = tracker->getLocation(locid);
     const auto& name = loc.getName();
@@ -97,6 +99,12 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
         bool visible = tracker->isVisible(loc, sec);
         auto reachable = tracker->isReachable(loc, sec);
         bool cleared = false; // not implemented
+        Widget::Color sectionColor;
+        if (cleared) sectionColor = MapWidget::StateColors[0];
+        else if (reachable == AccessibilityLevel::NONE) sectionColor = MapWidget::StateColors[2];
+        else if (reachable == AccessibilityLevel::SEQUENCE_BREAK) sectionColor = MapWidget::StateColors[4];
+        else if (reachable == AccessibilityLevel::INSPECT) sectionColor = MapWidget::StateColors[8];
+        else sectionColor = MapWidget::StateColors[1];
 
         std::list<std::string> hostedItems;
         for (const auto& hostedItem: sec.getHostedItems()) {
@@ -142,7 +150,11 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
             for (int i = 0; i < itemcount; ++i) {
                 const bool opened = compact ? (looted >= itemcount) : (i <= looted);
                 Item *w = MakeLocationIcon(0, 0, sz.x, sz.y, font, quality,
-                    tracker, sec.getParentID(), sec, opened, compact);
+                                           tracker, sec.getParentID(), sec, opened, compact, sectionColor,
+                                           [this, sectionColor](const std::string& locName, const std::string& secName, Widget::Color) {
+                                               if (_onSectionMiddleClick)
+                                                   _onSectionMiddleClick(locName, secName, sectionColor);
+                                           });
                 locationItems.push_back(w);
                 hbox->addChild(w);
                 if (compact)
@@ -206,7 +218,9 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
 
 
 Item* MapTooltip::MakeLocationIcon(int x, int y, int width, int height, FONT font, int quality,
-        Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact)
+                                   Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact,
+                                   Widget::Color sectionColor,
+                                   const std::function<void(const std::string&, const std::string&, Widget::Color)>& onSectionMiddleClick)
 {
     std::string fClosed, fOpened;
     std::string sClosed, sOpened;
@@ -243,7 +257,12 @@ Item* MapTooltip::MakeLocationIcon(int x, int y, int width, int height, FONT fon
     }
 
     auto name = sec.getName(); // TODO: id instead of name
-    w->onClick += {w, [w,locid,name,compact,tracker](void*, int, int, int btn) {
+    w->onClick += {w, [w,locid,name,compact,tracker,onSectionMiddleClick,sectionColor](void*, int, int, int btn) {
+        if (btn == BUTTON_MIDDLE) {
+            if (onSectionMiddleClick)
+                onSectionMiddleClick(locid, name, sectionColor);
+            return;
+        }
         if (!compact && btn == BUTTON_RIGHT && w->getStage1()<1)
             return;
         if (!compact && btn != BUTTON_RIGHT && w->getStage1()>0)
