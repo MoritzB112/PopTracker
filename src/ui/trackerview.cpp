@@ -279,7 +279,7 @@ Item* TrackerView::makeItem(int x, int y, int width, int height, const ::BaseIte
         _items[id].remove((Item*)s);
     }};
     _items[id].push_back(w);
-    
+
     if (stage1>=0 && stage2>=0)
         w->setStage(stage1,stage2);
     else if (origItem.getType() == ::BaseItem::Type::TOGGLE_BADGED && item->getType() == ::BaseItem::Type::TOGGLE)
@@ -341,7 +341,7 @@ TrackerView::~TrackerView()
     _tracker->onLocationSectionChanged -= this;
     _tracker->onUiHint -= this;
     _tracker = nullptr;
-    
+
     for (auto pair: _items) {
         for (auto w: pair.second) {
             w->onDestroy -= this;
@@ -429,16 +429,16 @@ void TrackerView::setHideUnreachableLocations(bool hide)
 }
 
 void TrackerView::updateLayout(const std::string& layout)
-{    
+{
     if (layout != "" && layout != _layoutRoot && std::find(_layoutRefs.begin(),_layoutRefs.end(),layout) == _layoutRefs.end()) return;
-    
+
     // store active tabs
     _activeTabs.clear();
     for (const auto tab: _tabs) {
         auto name = tab->getActiveTabName();
         if (!name.empty()) _activeTabs.push_back(name);
     }
-    
+
     // clear ui
     _tracker->onUiHint -= this;
     _mapTooltip = nullptr;
@@ -450,7 +450,7 @@ void TrackerView::updateLayout(const std::string& layout)
     _layoutRefs.clear();
     clearChildren();
     _relayoutRequired = true;
-    
+
     // record "missed" hints during update to replay them later
     _tracker->onUiHint += { this, [this] (void*, const std::string& name, const std::string& value) {
         _missedHints.push_back({name,value});
@@ -768,7 +768,7 @@ void TrackerView::updateState(const std::string& itemid)
 size_t TrackerView::addLayoutNodes(Container* container, const std::list<LayoutNode>& nodes, size_t depth)
 {
     // This returns the number of added children
-    
+
     size_t n=0;
     for (const auto& node: nodes) {
         if (addLayoutNode(container, node, depth)) n++;
@@ -778,19 +778,19 @@ size_t TrackerView::addLayoutNodes(Container* container, const std::list<LayoutN
 bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, size_t depth)
 {
     // This returns true if a child was added, false otherwise
-    
+
     if (depth>63) {
         fprintf(stderr, "Layout depth too high!\n");
         return false;
     }
-    
+
 #ifdef DEBUG_LAYOUT_TREE
     printf("%sadding layout node '%s'\n", std::string(depth*2,' ').c_str(),
                                           node.getType().c_str());
 #endif
-    
+
     const auto& children = node.getChildren();
-    
+
     if (node.getType() == "container" || node.getType() == "tab") {
         Container *w = new SimpleContainer(0,0,container->getWidth(),container->getHeight());
         w->setDropShaodw(node.getDropShadow(container->getDropShadow()));
@@ -821,7 +821,7 @@ bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, si
         auto maxSz = node.getMaxSize();
         if (sz.x>0) width = sz.x;
         if (sz.y>0) height = sz.y;
-        
+
         Dock *w = new Dock(0,0,width,height);
         w->setDropShaodw(node.getDropShadow(container->getDropShadow()));
         if (maxSz.x > 0) w->setMaxSize( {maxSz.x, w->getMaxWidth()} );
@@ -940,7 +940,7 @@ bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, si
         const auto& rows = node.getRows();
         size_t rowCount = rows.size();
         size_t colCount = 0;
-        for (const auto& row: rows) { 
+        for (const auto& row: rows) {
             if (row.size()>colCount) colCount = row.size();
         }
         Container *w = new SimpleContainer(0,0,container->getWidth(),container->getHeight()); // TODO: itemgrid
@@ -1182,7 +1182,7 @@ bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, si
         fprintf(stderr, "Invalid or unsupported node: %s\n", node.getType().c_str());
         return false;
     }
-    
+
     return true;
 }
 
