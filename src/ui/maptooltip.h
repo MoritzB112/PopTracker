@@ -17,12 +17,12 @@ public:
 
     MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tracker* tracker, const std::string& locid,
                std::function<Item*(int, int, int, int, const std::string& code)> makeItem,
-               std::function<void(const std::string& locid, const std::string& section, Widget::Color)> onSectionMiddleClick = {});
+               std::function<void(const std::string& locid, const std::string& section, Widget::Color, const std::string& requirements)> onSectionMiddleClick = {});
 
     static Item* MakeLocationIcon(int x, int y, int width, int height, FONT font, int quality,
-                                  Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact,
-                                  Widget::Color sectionColor,
-                                  const std::function<void(const std::string&, const std::string&, Widget::Color)>& onSectionMiddleClick = {});
+              Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact,
+              Widget::Color sectionColor,
+              const std::function<void(const std::string&, const std::string&, Widget::Color, const std::string&)>& onSectionMiddleClick = {});
 
 
     const std::string& getLocationID() const;
@@ -41,7 +41,7 @@ private:
     std::vector<Label*> _sectionLabels;
     std::vector<Container*> _sectionContainers;
     std::vector<std::list<Item*>> _sectionLocations;
-    std::function<void(const std::string&, const std::string&, Widget::Color)> _onSectionMiddleClick;
+    std::function<void(const std::string&, const std::string&, Widget::Color, const std::string&)> _onSectionMiddleClick;
 };
 
 

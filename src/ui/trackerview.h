@@ -94,7 +94,7 @@ protected:
     void updateItem(Item* w, const BaseItem& item);
     void pinMapTooltip(MapWidget* owner, const std::string& location, const Position& pos);
     void unpinMapTooltip();
-    void showMiddleClickPopup(MapWidget* owner, const Position& pos, const std::string& sectionName, Widget::Color sectionColor);
+    void showMiddleClickPopup(MapWidget* owner, const Position& pos, const std::string& locId, const std::string& sectionName, Widget::Color sectionColor, const std::string& requirementsText);
     void hideMiddleClickPopup();
 
     size_t addLayoutNodes(Container* container, const std::list<LayoutNode>& nodes, size_t depth=0);
