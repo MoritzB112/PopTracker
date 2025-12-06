@@ -182,6 +182,7 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
 
     setPadding(2*OFFSET);
     setSpacing(OFFSET);
+    _onSectionMiddleClick = onSectionMiddleClick;
 
     auto& loc = tracker->getLocation(locid);
     const auto& name = loc.getName();
