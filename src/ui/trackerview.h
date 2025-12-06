@@ -57,6 +57,13 @@ protected:
     MapWidget *_mapTooltipOwner = nullptr;
     std::string _mapTooltipName;
     std::map<std::string, int> _mapTooltipScrollOffsets;
+    MapTooltip *_pinnedMapTooltip = nullptr;
+    Position _pinnedMapTooltipPos;
+    MapWidget *_pinnedMapTooltipOwner = nullptr;
+    std::string _pinnedMapTooltipName;
+    ScrollVBox *_middleClickPopup = nullptr;
+    MapWidget *_middleClickPopupOwner = nullptr;
+    Position _middleClickPopupPos;
     std::string _tooltipItem;
     tick_t _tooltipTimer = 0;
     bool _tooltipTriggered = false;
@@ -85,6 +92,10 @@ protected:
     void updateLocationNow(const std::string& location);
     void updateMapTooltip();
     void updateItem(Item* w, const BaseItem& item);
+    void pinMapTooltip(MapWidget* owner, const std::string& location, const Position& pos);
+    void unpinMapTooltip();
+    void showMiddleClickPopup(MapWidget* owner, const Position& pos, const std::string& locId, const std::string& sectionName, Widget::Color sectionColor, const std::string& requirementsText);
+    void hideMiddleClickPopup();
 
     size_t addLayoutNodes(Container* container, const std::list<LayoutNode>& nodes, size_t depth=0);
     bool addLayoutNode(Container* container, const LayoutNode& node, size_t depth=0);
