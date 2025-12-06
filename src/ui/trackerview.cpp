@@ -541,7 +541,7 @@ void TrackerView::updateMapTooltip()
         _pinnedMapTooltip->update(_tracker, [this](Item* w, const BaseItem& item) { updateItem(w, item); });
         if (_pinnedMapTooltip->getAutoHeight() > _pinnedMapTooltip->getHeight()) {
             _pinnedMapTooltip->setHeight(std::min(_size.height - _pinnedMapTooltip->getTop(),
-                                                  _pinnedMapTooltip->getAutoHeight()));
+                    _pinnedMapTooltip->getAutoHeight()));
         } else if (_pinnedMapTooltip->getAutoHeight() < _pinnedMapTooltip->getHeight()) {
             _pinnedMapTooltip->setHeight(_pinnedMapTooltip->getAutoHeight());
         }
@@ -585,10 +585,10 @@ void TrackerView::showMiddleClickPopup(MapWidget* owner, const Position& pos, co
     auto off = MapTooltip::OFFSET;
     const int safetyMargin = 12;
     const int minWidth = 220;
-    const int minHeight = 120;
+    const int minHeight = 150;
     auto popup = new ScrollVBox(pos.left - _absX - safetyMargin, pos.top - _absY - safetyMargin, minWidth, 0);
-    popup->setPadding(2 * MapTooltip::OFFSET);
-    popup->setSpacing(3 * MapTooltip::OFFSET);
+    popup->setPadding(3 * MapTooltip::OFFSET);
+    popup->setSpacing(5 * MapTooltip::OFFSET);
     popup->setBackground({0x00, 0x00, 0x00, 0xbf});
 
     std::string titleText = sectionName.empty() ? locId : sectionName;
@@ -596,7 +596,7 @@ void TrackerView::showMiddleClickPopup(MapWidget* owner, const Position& pos, co
     title->setTextColor(sectionColor);
     title->setMinSize(title->getAutoSize());
     auto titleMargin = title->getMargin();
-    title->setMargin({titleMargin.left, titleMargin.top + MapTooltip::OFFSET, titleMargin.right, titleMargin.bottom});
+    title->setMargin({titleMargin.left, titleMargin.top + 2 * MapTooltip::OFFSET, titleMargin.right, titleMargin.bottom + 3 * MapTooltip::OFFSET});
     popup->addChild(title);
 
     Label* lbl = new Label(0, 0, 0, 0, _smallFont, requirementsText.empty() ? "No requirements" : requirementsText);
@@ -630,7 +630,8 @@ void TrackerView::showMiddleClickPopup(MapWidget* owner, const Position& pos, co
     }};
 }
 
-void TrackerView::pinMapTooltip(MapWidget* owner, const std::string& location, const Position& pos) {
+void TrackerView::pinMapTooltip(MapWidget* owner, const std::string& location, const Position& pos)
+{
     if (!owner)
         return;
 
@@ -641,18 +642,16 @@ void TrackerView::pinMapTooltip(MapWidget* owner, const std::string& location, c
     _pinnedMapTooltipPos = pos;
     auto off = MapTooltip::OFFSET;
 
-    _pinnedMapTooltip = new MapTooltip(pos.left - _absX - off, pos.top - _absY - off, _font, _smallFont,
-                                       _defaultItemQuality,
-                                       _tracker, location, [this](auto ...args) { return makeItem(args...); },
-                                       [this](const std::string &, const std::string &, Widget::Color,
-                                              const std::string &) {
-                                           unpinMapTooltip();
-                                       });
+    _pinnedMapTooltip = new MapTooltip(pos.left-_absX-off, pos.top-_absY-off, _font, _smallFont, _defaultItemQuality,
+            _tracker, location, [this](auto ...args) { return makeItem(args...); },
+            [this](const std::string&, const std::string&, Widget::Color, const std::string&) {
+                unpinMapTooltip();
+            });
 
     positionMapTooltip(_pinnedMapTooltip, owner, pos, _absX, _absY, _size);
     _pinnedMapTooltip->scrollTo(0, _mapTooltipScrollOffsets[location]);
     addChild(_pinnedMapTooltip);
-    _pinnedMapTooltip->onClick += {this, [this](void *, int, int, int btn) {
+    _pinnedMapTooltip->onClick += { this, [this](void*, int, int, int btn) {
         if (btn == MouseButton::BUTTON_MIDDLE)
             unpinMapTooltip();
     }};
@@ -1056,10 +1055,10 @@ bool TrackerView::addLayoutNode(Container* container, const LayoutNode& node, si
                 _mapTooltipPos = {absX,absY};
                 auto off = MapTooltip::OFFSET;
                 _mapTooltip = new MapTooltip(absX-_absX-off, absY-_absY-off, _font, _smallFont, _defaultItemQuality,
-                                             _tracker, locid, [this](auto ...args) { return makeItem(args...); },
-                                             [this, map, absX, absY](const std::string& locName, const std::string& secName, Widget::Color color, const std::string& requirements) {
-                                                 showMiddleClickPopup(map, {absX, absY}, locName, secName, color, requirements);
-                                             });
+                        _tracker, locid, [this](auto ...args) { return makeItem(args...); },
+                        [this, map, absX, absY](const std::string& locName, const std::string& secName, Widget::Color color, const std::string& requirements) {
+                            showMiddleClickPopup(map, {absX, absY}, locName, secName, color, requirements);
+                        });
                 // TODO: move mapTooltip to mapwidget?
                 // fix up position
                 positionMapTooltip(_mapTooltip, map, {absX, absY}, _absX, _absY, _size);

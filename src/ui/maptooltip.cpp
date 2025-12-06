@@ -7,6 +7,7 @@
 #include "../ui/trackerview.h"
 #include <list>
 #include <sstream>
+#include <unordered_set>
 
 
 namespace Ui {
@@ -32,6 +33,19 @@ static uint8_t mix(uint8_t v, uint8_t w, uint8_t weight)
     return ((uint32_t)w * (uint32_t)weight + (uint32_t)v * (255 - weight))/255;
 }
 
+static std::string join(const std::vector<std::string>& values, const std::string& separator)
+{
+    if (values.empty())
+        return "";
+    std::ostringstream stream;
+    for (size_t i = 0; i < values.size(); ++i) {
+        if (i > 0)
+            stream << separator;
+        stream << values[i];
+    }
+    return stream.str();
+}
+
 Widget::Color MapTooltip::getSectionColor(AccessibilityLevel reachable, bool cleared)
 {
     Widget::Color c;
@@ -46,7 +60,13 @@ Widget::Color MapTooltip::getSectionColor(AccessibilityLevel reachable, bool cle
     return c;
 }
 
-static std::string formatRuleToken(const std::string& rule, Tracker* tracker)
+static constexpr int REQUIREMENT_NESTING_LIMIT = 4;
+
+static std::string formatRequirements(Tracker* tracker, const LocationSection& sec,
+        std::unordered_set<std::string>& visited, int depth);
+
+static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
+        std::unordered_set<std::string>& visited, int depth)
 {
     std::string s = rule;
     bool inspectOnly = false;
@@ -77,9 +97,28 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker)
         label = "Location " + s.substr(1);
     } else if (isAccessibilityLevel) {
         label = "Rule " + s.substr(1);
+    } else if (s.find('/') != s.npos && depth < REQUIREMENT_NESTING_LIMIT) {
+        const auto [loc, sec] = tracker->getLocationAndSection(s);
+        if (!loc.getID().empty() && !sec.getName().empty()) {
+            label = sec.getName();
+            auto key = loc.getID() + "/" + sec.getName();
+            if (visited.emplace(key).second) {
+                const auto nested = formatRequirements(tracker, sec, visited, depth + 1);
+                if (!nested.empty())
+                    label += ": " + nested;
+                visited.erase(key);
+            }
+        }
     } else {
         const auto& item = tracker->getItemByCode(s);
         label = item.getName().empty() ? s : item.getName();
+
+        const auto providers = tracker->ListProviderNamesForCode(s);
+        if (!providers.empty()) {
+            const auto providersLabel = join(providers, ", ");
+            if (!(providers.size() == 1 && providersLabel == label))
+                label += " (" + providersLabel + ")";
+        }
     }
 
     if (count > 1)
@@ -92,7 +131,8 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker)
     return label;
 }
 
-static std::string formatRequirements(Tracker* tracker, const LocationSection& sec)
+static std::string formatRequirements(Tracker* tracker, const LocationSection& sec,
+        std::unordered_set<std::string>& visited, int depth)
 {
     const auto& rules = sec.getAccessRules();
     if (rules.empty())
@@ -107,7 +147,7 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
         bool first = true;
         stream << "• ";
         for (const auto& rule : ruleSet) {
-            auto token = formatRuleToken(rule, tracker);
+            auto token = formatRuleToken(rule, tracker, visited, depth);
             if (token.empty())
                 continue;
             if (!first)
@@ -124,14 +164,21 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
     return stream.str();
 }
 
+static std::string formatRequirements(Tracker* tracker, const LocationSection& sec)
+{
+    std::unordered_set<std::string> visited;
+    return formatRequirements(tracker, sec, visited, 0);
+}
+
 
 MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tracker* tracker, const std::string& locid,
-                       std::function<Item*(int, int, int, int, const std::string& code)> makeItem,
-                       std::function<void(const std::string& locid, const std::string& section, Widget::Color, const std::string& requirements)> onSectionMiddleClick)
+        std::function<Item*(int, int, int, int, const std::string& code)> makeItem,
+        std::function<void(const std::string& locid, const std::string& section, Widget::Color, const std::string& requirements)> onSectionMiddleClick)
     : ScrollVBox(x, y, 100, 100)
 {
     bool compact = true;
     _id = locid;
+    _onSectionMiddleClick = onSectionMiddleClick;
 
     setPadding(2*OFFSET);
     setSpacing(OFFSET);
@@ -230,11 +277,11 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
             for (int i = 0; i < itemcount; ++i) {
                 const bool opened = compact ? (looted >= itemcount) : (i <= looted);
                 Item *w = MakeLocationIcon(0, 0, sz.x, sz.y, font, quality,
-                                           tracker, sec.getParentID(), sec, opened, compact, sectionColor,
-                                           [this, sectionColor, requirementsText](const std::string& locName, const std::string& secName, Widget::Color, const std::string&) {
-                                               if (_onSectionMiddleClick)
-                                                   _onSectionMiddleClick(locName, secName, sectionColor, requirementsText);
-                                           });
+                    tracker, sec.getParentID(), sec, opened, compact, sectionColor,
+                    [this, sectionColor, requirementsText](const std::string& locName, const std::string& secName, Widget::Color, const std::string&) {
+                        if (_onSectionMiddleClick)
+                            _onSectionMiddleClick(locName, secName, sectionColor, requirementsText);
+                    });
                 locationItems.push_back(w);
                 hbox->addChild(w);
                 if (compact)
@@ -298,9 +345,9 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
 
 
 Item* MapTooltip::MakeLocationIcon(int x, int y, int width, int height, FONT font, int quality,
-                                   Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact,
-                                   Widget::Color sectionColor,
-                                   const std::function<void(const std::string&, const std::string&, Widget::Color, const std::string&)>& onSectionMiddleClick)
+        Tracker* tracker, const std::string& locid, const LocationSection& sec, bool opened, bool compact,
+        Widget::Color sectionColor,
+        const std::function<void(const std::string&, const std::string&, Widget::Color, const std::string&)>& onSectionMiddleClick)
 {
     std::string fClosed, fOpened;
     std::string sClosed, sOpened;
