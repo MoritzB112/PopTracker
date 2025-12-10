@@ -191,6 +191,7 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
         std::unordered_set<std::string>& visited, int depth)
 {
     const auto& rules = sec.getAccessRules();
+    const auto& parentRules = sec.
     if (rules.empty())
         return "No requirements";
 
