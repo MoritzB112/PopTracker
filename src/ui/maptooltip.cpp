@@ -60,13 +60,13 @@ Widget::Color MapTooltip::getSectionColor(AccessibilityLevel reachable, bool cle
     return c;
 }
 
-static constexpr int REQUIREMENT_NESTING_LIMIT = 4;
+static constexpr int REQUIREMENT_NESTING_LIMIT = 8;
 
 static std::string formatRequirements(Tracker* tracker, const LocationSection& sec,
-        std::unordered_set<std::string>& visited, int depth);
+        std::unordered_set<std::string>& visited, int depth, bool itemsOnly, bool allowFallback);
 
 static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
-        std::unordered_set<std::string>& visited, int depth)
+        std::unordered_set<std::string>& visited, int depth, bool itemsOnly, bool allowFallback)
 {
     std::string s = rule;
     bool inspectOnly = false;
@@ -103,9 +103,13 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
             if (depth < REQUIREMENT_NESTING_LIMIT) {
                 auto key = loc.getID() + "/" + sec.getName();
                 if (visited.emplace(key).second) {
-                    const auto nested = formatRequirements(tracker, sec, visited, depth + 1);
-                    if (!nested.empty())
-                        label += ": " + nested;
+                    const auto nested = formatRequirements(tracker, sec, visited, depth + 1, itemsOnly, allowFallback);
+                    if (!nested.empty()) {
+                        if (itemsOnly)
+                            label = nested;
+                        else
+                            label += ": " + nested;
+                    }
                     visited.erase(key);
                 }
             }
@@ -116,32 +120,42 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
                 if (depth < REQUIREMENT_NESTING_LIMIT) {
                     auto key = altLoc->getID() + "/" + altSec->getName();
                     if (visited.emplace(key).second) {
-                        const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1);
-                        if (!nested.empty())
-                            label += ": " + nested;
+                        const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1, itemsOnly, allowFallback);
+                        if (!nested.empty()) {
+                            if (itemsOnly)
+                                label = nested;
+                            else
+                                label += ": " + nested;
+                        }
                         visited.erase(key);
                     }
                 }
             } else {
-                label = "Location " + ref;
                 if (!secname.empty() && depth < REQUIREMENT_NESTING_LIMIT) {
-                    auto nested = formatRuleToken(secname, tracker, visited, depth + 1);
-                    if (!nested.empty() && nested != secname)
-                        label += ": " + nested;
+                    auto nested = formatRuleToken(secname, tracker, visited, depth + 1, itemsOnly, allowFallback);
+                    if (!nested.empty())
+                        label = nested;
+                } else if (!itemsOnly) {
+                    label = "Location " + ref;
                 }
             }
         }
     } else if (isAccessibilityLevel) {
-        label = "Rule " + s.substr(1);
+        if (!itemsOnly)
+            label = "Rule " + s.substr(1);
     } else if (s.find('/') != s.npos && depth < REQUIREMENT_NESTING_LIMIT) {
         const auto [loc, sec] = tracker->getLocationAndSection(s);
         if (!loc.getID().empty() && !sec.getName().empty()) {
             label = sec.getName();
             auto key = loc.getID() + "/" + sec.getName();
             if (visited.emplace(key).second) {
-                const auto nested = formatRequirements(tracker, sec, visited, depth + 1);
-                if (!nested.empty())
-                    label += ": " + nested;
+                const auto nested = formatRequirements(tracker, sec, visited, depth + 1, itemsOnly, allowFallback);
+                if (!nested.empty()) {
+                    if (itemsOnly)
+                        label = nested;
+                    else
+                        label += ": " + nested;
+                }
                 visited.erase(key);
             }
         } else {
@@ -150,45 +164,51 @@ static std::string formatRuleToken(const std::string& rule, Tracker* tracker,
                 label = altSec->getName();
                 auto key = altLoc->getID() + "/" + altSec->getName();
                 if (visited.emplace(key).second) {
-                    const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1);
-                    if (!nested.empty())
-                        label += ": " + nested;
+                    const auto nested = formatRequirements(tracker, *altSec, visited, depth + 1, itemsOnly, allowFallback);
+                    if (!nested.empty()) {
+                        if (itemsOnly)
+                            label = nested;
+                        else
+                            label += ": " + nested;
+                    }
                     visited.erase(key);
                 }
             } else {
-                label = s;
                 const auto providers = tracker->ListProviderNamesForCode(s);
-                if (!providers.empty()) {
-                    const auto providersLabel = join(providers, ", ");
-                    if (!(providers.size() == 1 && providersLabel == label))
-                        label += " (" + providersLabel + ")";
+                if (providers.empty()) {
+                    if (!itemsOnly)
+                        label = s;
+                } else {
+                    label = join(providers, ", ");
                 }
             }
         }
     } else {
         const auto& item = tracker->getItemByCode(s);
-        label = item.getName().empty() ? s : item.getName();
-
         const auto providers = tracker->ListProviderNamesForCode(s);
         if (!providers.empty()) {
-            const auto providersLabel = join(providers, ", ");
-            if (!(providers.size() == 1 && providersLabel == label))
-                label += " (" + providersLabel + ")";
+            label = join(providers, ", ");
+        } else if (!item.getName().empty()) {
+            label = item.getName();
+        } else if (!itemsOnly) {
+            label = s;
         }
     }
 
-    if (count > 1)
-        label += " x" + std::to_string(count);
-    if (optional)
-        label += " [optional]";
-    if (inspectOnly)
-        label += " (inspect)";
+    if (!label.empty()) {
+        if (count > 1)
+            label += " x" + std::to_string(count);
+        if (optional)
+            label += " [optional]";
+        if (inspectOnly)
+            label += " (inspect)";
+    }
 
     return label;
 }
 
 static std::string formatRequirements(Tracker* tracker, const LocationSection& sec,
-        std::unordered_set<std::string>& visited, int depth)
+        std::unordered_set<std::string>& visited, int depth, bool itemsOnly, bool allowFallback)
 {
     const auto& rules = sec.getAccessRules();
     const auto& parentRules = sec.
@@ -204,7 +224,7 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
         bool first = true;
         stream << "• ";
         for (const auto& rule : ruleSet) {
-            auto token = formatRuleToken(rule, tracker, visited, depth);
+            auto token = formatRuleToken(rule, tracker, visited, depth, itemsOnly, allowFallback);
             if (token.empty())
                 continue;
             if (!first)
@@ -212,8 +232,15 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
             stream << token;
             first = false;
         }
-        if (first)
-            stream << "No requirements";
+        if (first) {
+            if (itemsOnly && allowFallback) {
+                const auto fallback = formatRequirements(tracker, sec, visited, depth, false, false);
+                if (!fallback.empty())
+                    stream << fallback;
+            }
+            if (first)
+                stream << (itemsOnly ? "No trackable item requirements" : "No requirements");
+        }
 
         ++setIndex;
     }
@@ -221,10 +248,10 @@ static std::string formatRequirements(Tracker* tracker, const LocationSection& s
     return stream.str();
 }
 
-static std::string formatRequirements(Tracker* tracker, const LocationSection& sec)
+static std::string formatRequirements(Tracker* tracker, const LocationSection& sec, bool itemsOnly)
 {
     std::unordered_set<std::string> visited;
-    return formatRequirements(tracker, sec, visited, 0);
+    return formatRequirements(tracker, sec, visited, 0, itemsOnly, true);
 }
 
 
@@ -288,7 +315,7 @@ MapTooltip::MapTooltip(int x, int y, FONT font, FONT smallFont, int quality, Tra
         else if (reachable == AccessibilityLevel::SEQUENCE_BREAK) sectionColor = MapWidget::StateColors[4];
         else if (reachable == AccessibilityLevel::INSPECT) sectionColor = MapWidget::StateColors[8];
         else sectionColor = MapWidget::StateColors[1];
-        const auto requirementsText = formatRequirements(tracker, sec);
+        const auto requirementsText = formatRequirements(tracker, sec, true);
 
         std::list<std::string> hostedItems;
         for (const auto& hostedItem: sec.getHostedItems()) {
@@ -444,7 +471,7 @@ Item* MapTooltip::MakeLocationIcon(int x, int y, int width, int height, FONT fon
     w->onClick += {w, [w,locid,name,compact,tracker,onSectionMiddleClick,sectionColor, sec](void*, int, int, int btn) {
         if (btn == BUTTON_MIDDLE) {
             if (onSectionMiddleClick)
-                onSectionMiddleClick(locid, name, sectionColor, formatRequirements(tracker, sec));
+                onSectionMiddleClick(locid, name, sectionColor, formatRequirements(tracker, sec, true));
             return;
         }
         if (!compact && btn == BUTTON_RIGHT && w->getStage1()<1)
