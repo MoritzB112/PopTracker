@@ -65,6 +65,11 @@ public:
         }
     };
 
+    struct LocationCounts final {
+        int total = 0;
+        int reachable = 0;
+    };
+
     bool AddItems(const std::string& file);
     bool AddItemsFromString(std::string& s);
     bool AddLocations(const std::string& file);
@@ -92,6 +97,7 @@ public:
     const Map& getMap(const std::string& name) const;
     std::list<std::string> getMapNames() const;
     std::list< std::pair<std::string, Location::MapLocation> > getMapLocations(const std::string& mapname) const;
+    LocationCounts getLocationCounts();
     Location& getLocation(const std::string& name, bool partialMatch=false);
     std::pair<Location&, LocationSection&> getLocationAndSection(const std::string& id);
     LocationSection& getLocationSection(const std::string& id);

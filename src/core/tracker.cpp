@@ -1017,6 +1017,42 @@ bool Tracker::isVisible(const Location::MapLocation& mapLoc)
     return resolveRules(mapLoc.getVisibilityRules(), true, false) != AccessibilityLevel::NONE;
 }
 
+Tracker::LocationCounts Tracker::getLocationCounts()
+{
+    LocationCounts counts;
+
+    for (const auto& location : _locations) {
+        // Logic helper locations have no map marker and are not player-facing
+        // checks. This also keeps the result independent of a pack's internal
+        // rule organization.
+        if (location.getMapLocations().empty())
+            continue;
+        for (const auto& section : location.getSections()) {
+            // Referenced sections are display aliases. Count their definition,
+            // rather than the alias, so they are never counted twice.
+            if (!section.getRef().empty() || !isVisible(location, section))
+                continue;
+
+            // A hosted item represents tracker state (for example, an entrance
+            // or exit), not a collectible location check. Only item_count
+            // contributes to the check total.
+            //
+            // Total is the number of checks selected by the current settings;
+            // clearing a check must not change it.
+            const int total = section.getItemCount();
+            counts.total += total;
+
+            int remaining = std::max(0, section.getItemCount() - section.getItemCleared());
+            if (!remaining)
+                continue;
+
+            if (isReachable(location, section) == AccessibilityLevel::NORMAL)
+                counts.reachable += remaining;
+        }
+    }
+    return counts;
+}
+
 AccessibilityLevel Tracker::resolveRules(
     const std::list< std::list<std::string> >& rules,
     const bool visibilityRules,

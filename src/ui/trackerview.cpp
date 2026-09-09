@@ -503,6 +503,7 @@ void TrackerView::updateLocationsNow()
         }
     }
     _mapsDirty = false;
+    onLocationCountsChanged.emit(this);
 }
 
 void TrackerView::updateLocation(const std::string& location)

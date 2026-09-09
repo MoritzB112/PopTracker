@@ -75,6 +75,12 @@ DefaultTrackerWindow::DefaultTrackerWindow(const char* title, SDL_Surface* icon,
     _hboxAutoTrackers->setSpacing(6);
     hbox->addChild(_hboxAutoTrackers);
 
+    _lblLocationCounts = new Label(0,0,0,32-4,_font,"In logic: 0  |  Total: 0");
+    _lblLocationCounts->setWidth(_lblLocationCounts->getAutoWidth());
+    _lblLocationCounts->setTextColor({127, 223, 127});
+    _lblLocationCounts->setVisible(false);
+    hbox->addChild(_lblLocationCounts);
+
     _lblTooltip = new Label(0,0,0,0,_font,"");
     _lblTooltip->setHeight(32-4);
     _lblTooltip->setGrow(1,1);
@@ -152,6 +158,7 @@ DefaultTrackerWindow::~DefaultTrackerWindow()
     _btnPackSettings = nullptr;
     _hboxAutoTrackers = nullptr;
     _lblsAutoTrackers.clear();
+    _lblLocationCounts = nullptr;
     _vboxProgress = nullptr;
     _lblProgressTitle = nullptr;
     _lblProgressPercent = nullptr;
@@ -178,6 +185,11 @@ void DefaultTrackerWindow::setTracker(Tracker* tracker, const std::string& layou
     TrackerWindow::setTracker(tracker, layout);
     if (tracker) {
         hideMessage();
+        _view->onLocationCountsChanged += {this, [this, tracker](void*) {
+            updateLocationCounts(tracker);
+        }};
+        updateLocationCounts(tracker);
+        _lblLocationCounts->setVisible(true);
         tracker->onLayoutChanged -= this;
         tracker->onLayoutChanged += {this, [this,tracker](void*, const std::string&) {
             if (_btnBroadcast) _btnBroadcast->setVisible(tracker->hasLayout("tracker_broadcast"));
@@ -208,6 +220,7 @@ void DefaultTrackerWindow::setTracker(Tracker* tracker, const std::string& layou
         if (_btnImport) _btnImport->setVisible(true);
         if (_btnExport) _btnExport->setVisible(true);
     } else {
+        _lblLocationCounts->setVisible(false);
         if (_btnBroadcast) _btnBroadcast->setVisible(false);
         if (_btnPackSettings) _btnPackSettings->setVisible(false);
         if (_btnReload) _btnReload->setVisible(false);
@@ -215,6 +228,26 @@ void DefaultTrackerWindow::setTracker(Tracker* tracker, const std::string& layou
         if (_btnExport) _btnExport->setVisible(false);
     }
     raiseChild(_loadPackWidget);
+}
+
+void DefaultTrackerWindow::updateLocationCounts(Tracker* tracker)
+{
+    if (!tracker || !_lblLocationCounts)
+        return;
+
+    const auto counts = tracker->getLocationCounts();
+    const std::string text = "In logic: " + std::to_string(counts.reachable)
+            + "  |  Total: " + std::to_string(counts.total);
+    if (_lblLocationCounts->getText() == text)
+        return;
+
+    const auto oldWidth = _lblLocationCounts->getWidth();
+    _lblLocationCounts->setText(text);
+    _lblLocationCounts->setWidth(_lblLocationCounts->getAutoWidth());
+    if (_lblLocationCounts->getWidth() != oldWidth) {
+        if (auto menu = dynamic_cast<HBox*>(_menu))
+            menu->relayout();
+    }
 }
 
 void DefaultTrackerWindow::showMessage(const std::string& message, bool error)

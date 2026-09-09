@@ -35,6 +35,7 @@ public:
 
     Signal<const std::string&> onItemHover;
     Signal<const std::string&> onItemTooltip;
+    Signal<> onLocationCountsChanged;
 
     static int CalculateLocationState(Tracker* tracker, const std::string& location);
     static int CalculateLocationState(Tracker* tracker, const std::string& location,
